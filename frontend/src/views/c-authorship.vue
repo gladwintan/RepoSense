@@ -37,36 +37,39 @@
             option(:value='false') Ascending
           label order
       .searchbox
-        input.radio-button--search(
-          type="radio",
-          value="search",
-          v-model="filterType",
-          @change="indicateSearchBar"
-        )
         .mui-form--inline
           input#search(
             type="search",
-            placeholder="Filter by glob",
+            placeholder="Search for file",
             ref="searchBar",
             :value="searchBarValue",
-            @keyup.enter="indicateSearchBar(); updateSearchBarValue();"
+            @keyup.enter="updateSearchBarValue();"
           )
           button#submit-button(
             type="button",
-            @click="indicateSearchBar(); updateSearchBarValue();"
-          ) Filter
+            @click="updateSearchBarValue();"
+          ) Search
+        .search-type 
+          input.radio-button--search(
+            type="radio",
+            value="substring",
+            id="substringSearch"
+            v-model="searchType",
+            @change="indicateSubstringSearch"
+          )
+          label(for="subStringSearch") Substring
+          input.radio-button--search(
+            type="radio",
+            value="globalPattern",
+            v-model="searchType",
+            @change="indicateGlobalPatternSearch"
+          )
+          label(for="subStringSearch") Global pattern          
       .fileTypes
-        input.radio-button--checkbox(
-          type="radio",
-          value="checkboxes",
-          v-model="filterType",
-          @change="indicateCheckBoxes"
-        )
         c-file-type-checkboxes(
           :file-types="fileTypes",
           :file-type-colors="fileTypeColors",
           v-model:selected-file-types="selectedFileTypes",
-          @update:selected-file-types="indicateCheckBoxes",
           :all-checkbox-label="allCheckboxLabel",
           :file-type-checkbox-labels="checkboxLabels"
         )
@@ -113,7 +116,7 @@ import getNonRepeatingColor from '../utils/random-color-generator';
 import { StoreState } from '../types/vuex.d';
 import { FileResult, Line } from '../types/zod/authorship-type';
 import { AuthorshipFile, AuthorshipFileSegment, SegmentState } from '../types/types';
-import { FilesSortType, FilterType } from '../types/authorship';
+import { FilesSortType, SearchType } from '../types/authorship';
 
 const filesSortDict = {
   linesOfCode: (file: AuthorshipFile): number => file.lineCount,
@@ -125,7 +128,7 @@ const filesSortDict = {
 function authorshipInitialState(): {
   isLoaded: boolean,
   selectedFiles: Array<AuthorshipFile>,
-  filterType: FilterType,
+  searchType: SearchType,
   selectedFileTypes: Array<string>,
   fileTypes: Array<string>,
   filesLinesObj: { [key: string]: number },
@@ -142,7 +145,7 @@ function authorshipInitialState(): {
   return {
     isLoaded: false,
     selectedFiles: [] as Array<AuthorshipFile>,
-    filterType: FilterType.Checkboxes,
+    searchType: SearchType.Substring,
     selectedFileTypes: [] as Array<string>,
     fileTypes: [] as Array<string>,
     filesLinesObj: {} as { [key: string]: number },
@@ -174,7 +177,7 @@ export default defineComponent({
   data(): {
     isLoaded: boolean,
     selectedFiles: Array<AuthorshipFile>,
-    filterType: FilterType,
+    searchType: SearchType,
     selectedFileTypes: Array<string>,
     fileTypes: Array<string>,
     filesLinesObj: { [key: string]: number },
@@ -209,7 +212,6 @@ export default defineComponent({
         }
 
         this.updateSelectedFiles();
-        this.indicateCheckBoxes();
       },
     },
 
@@ -225,7 +227,6 @@ export default defineComponent({
         }
 
         this.updateSelectedFiles();
-        this.indicateCheckBoxes();
       },
     },
 
@@ -319,6 +320,10 @@ export default defineComponent({
       this.updateSelectedFiles();
     },
 
+    searchType(): void {
+      this.updateSelectedFiles();
+    },
+
     info(): void {
       Object.assign(this.$data, authorshipInitialState());
       this.initiate();
@@ -350,7 +355,6 @@ export default defineComponent({
       this.toReverseSortFiles = hash.reverseAuthorshipOrder !== 'false';
 
       if (hash.filteredFileName) {
-        this.indicateSearchBar();
         this.searchBarValue = hash.authorshipFilesGlob?? hash.filteredFileName;
         if (!(hash.authorshipFilesGlob)) {
           window.addHash("authorshipFilesGlob", hash.filteredFileName);
@@ -390,7 +394,6 @@ export default defineComponent({
       if (window.hashParams.filteredFileName) {
         addHash('authorshipFilesGlob', window.hashParams.filteredFileName);
         this.searchBarValue = window.hashParams.filteredFileName;
-        this.indicateSearchBar();
       }
     },
 
@@ -637,26 +640,15 @@ export default defineComponent({
       this.selectedFiles = this.info.files.filter(
         (file) => ((this.selectedFileTypes.includes(file.fileType) && !file.isBinary && !file.isIgnored)
           || (file.isBinary && this.isBinaryFilesChecked) || (file.isIgnored && this.isIgnoredFilesChecked))
-          && minimatch(file.path, this.searchBarValue || '*', { matchBase: true, dot: true }),
+          && (this.searchType === 'globalPattern' 
+            ? minimatch(file.path, this.searchBarValue || '*', { matchBase: true, dot: true })
+            : file.path.toLowerCase().includes(this.searchBarValue.toLowerCase()))
       )
         .sort(this.sortingFunction);
       if (setIsLoaded) {
         this.isLoaded = true;
       }
       await this.$store.dispatch('incrementLoadingOverlayCountForceReload', -1);
-    },
-
-    indicateSearchBar(): void {
-      this.selectedFileTypes = this.fileTypes.slice();
-      this.isBinaryFilesChecked = true;
-      this.isIgnoredFilesChecked = true;
-      this.filterType = FilterType.Search;
-    },
-
-    indicateCheckBoxes(): void {
-      this.searchBarValue = '';
-      this.filterType = FilterType.Checkboxes;
-      this.updateFileTypeHash();
     },
 
     getCheckboxDetails(fileTitle: string, fileType: string, lineCount: number, blankLineCount: number): {
@@ -684,11 +676,6 @@ export default defineComponent({
 #tab-authorship {
   .title {
     .contribution {
-      .radio-button--search {
-        float: left;
-        margin: 1.75rem 2.0rem 0 0;
-      }
-
       .radio-button--checkbox {
         float: left;
         margin: 0 2.0rem 0 0;
@@ -719,7 +706,17 @@ export default defineComponent({
       }
 
       .searchbox {
-        margin-bottom: 1em;
+        margin-bottom: 2em;
+
+        .search-type {
+          display: flex;
+          margin-top: 1em;
+
+          .radio-button--search {
+            margin-left: 2em;
+            margin-right: .5em;
+          }
+        }
       }
 
       .select {

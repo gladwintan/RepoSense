@@ -2,7 +2,7 @@ import { createApp, DirectiveBinding } from 'vue';
 import { dom } from '@fortawesome/fontawesome-svg-core';
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 import { ObserveVisibility } from 'vue-observe-visibility';
-import hljs from 'highlight.js';
+import hljs from './utils/highlightjs-languages';
 import router from './router/index';
 import 'muicss/dist/css/mui.min.css';
 import 'normalize.css/normalize.css';

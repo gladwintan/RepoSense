@@ -5,7 +5,7 @@ export enum FilesSortType {
   FileType = 'fileType',
 }
 
-export enum FilterType {
-  Checkboxes = 'checkboxes',
-  Search = 'search',
+export enum SearchType {
+  Substring = 'substring',
+  GlobalPattern = 'globalPattern',
 }
